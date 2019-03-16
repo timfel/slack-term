@@ -362,7 +362,7 @@ func (s *SlackService) SendCommand(channelID string, message string) (bool, erro
 
 // GetMessages will get messages for a channel, group or im channel delimited
 // by a count.
-func (s *SlackService) GetMessages(channelID string, count int) ([]components.Message, error) {
+func (s *SlackService) GetMessages(channelID string, count int) ([]components.Message, []components.ChannelItem, error) {
 
 	// https://godoc.org/github.com/nlopes/slack#GetConversationHistoryParameters
 	historyParams := slack.GetConversationHistoryParameters{
@@ -373,14 +373,28 @@ func (s *SlackService) GetMessages(channelID string, count int) ([]components.Me
 
 	history, err := s.Client.GetConversationHistory(&historyParams)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Construct the messages
 	var messages []components.Message
+	var threads []components.ChannelItem
 	for _, message := range history.Messages {
 		msg := s.CreateMessage(message, channelID)
 		messages = append(messages, msg)
+
+		// FIXME: create boolean isThread
+		if msg.Thread != "" {
+
+			threads = append(threads, components.ChannelItem{
+				ID:          msg.ID,
+				Name:        msg.Thread,
+				Type:        components.ChannelTypeGroup,
+				StylePrefix: s.Config.Theme.Channel.Prefix,
+				StyleIcon:   s.Config.Theme.Channel.Icon,
+				StyleText:   s.Config.Theme.Channel.Text,
+			})
+		}
 	}
 
 	// Reverse the order of the messages, we want the newest in
@@ -390,7 +404,7 @@ func (s *SlackService) GetMessages(channelID string, count int) ([]components.Me
 		messagesReversed = append(messagesReversed, messages[i])
 	}
 
-	return messagesReversed, nil
+	return messagesReversed, threads, nil
 }
 
 // CreateMessage will create a string formatted message that can be rendered
