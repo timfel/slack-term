@@ -3,6 +3,8 @@ package components
 import (
 	"fmt"
 	"html"
+	"strings"
+	"time"
 
 	"github.com/erroneousboat/termui"
 	"github.com/renstrom/fuzzysearch/fuzzy"
@@ -28,16 +30,20 @@ const (
 
 type ChannelItem struct {
 	ID           string
+	ListIndex    int
 	Name         string
+	DisplayName  string
 	Topic        string
 	Type         string
 	UserID       string
 	Presence     string
 	Notification bool
+	LastReadTime time.Time
 
 	StylePrefix string
 	StyleIcon   string
 	StyleText   string
+	IsGroupPrimary bool // first item in a multiline group
 }
 
 // ToString will set the label of the channel, how it will be
@@ -56,9 +62,17 @@ func (c ChannelItem) ToString() string {
 	case ChannelTypeChannel:
 		icon = IconChannel
 	case ChannelTypeGroup:
-		icon = IconGroup
+		if c.IsGroupPrimary {
+			icon = IconGroup
+		} else {
+			icon = " "
+		}
 	case ChannelTypeMpIM:
-		icon = IconMpIM
+		if c.IsGroupPrimary {
+			icon = IconMpIM
+		} else {
+			icon = " "
+		}
 	case ChannelTypeIM:
 		switch c.Presence {
 		case PresenceActive:
@@ -86,11 +100,11 @@ func (c ChannelItem) GetChannelName() string {
 	var channelName string
 	if c.Topic != "" {
 		channelName = fmt.Sprintf("%s - %s",
-			html.UnescapeString(c.Name),
+			html.UnescapeString(c.DisplayName),
 			html.UnescapeString(c.Topic),
 		)
 	} else {
-		channelName = c.Name
+		channelName = c.DisplayName
 	}
 	return channelName
 }
@@ -203,7 +217,45 @@ func (c *Channels) SetY(y int) {
 }
 
 func (c *Channels) SetChannels(channels []ChannelItem) {
-	c.ChannelItems = channels
+	groupPrefix := "mpdm-"
+
+	for listIndex, channel := range channels {
+		if channel.Type == ChannelTypeMpIM || channel.Type == ChannelTypeGroup {
+			if strings.HasPrefix(channel.Name, groupPrefix) {
+				// add multiline group channel
+				channel.Name = channel.Name[len(groupPrefix):]
+			}
+
+			groupMembers := strings.Split(channel.Name, "--")
+			for memberIdx, groupMember := range groupMembers {
+				if memberIdx == len(groupMembers)-1 {
+					groupMember = strings.TrimSuffix(groupMember, "-1")
+				}
+
+				displayName := strings.TrimSuffix(strings.Replace(channel.Name, "--", ", ", -1), "-1")
+
+				c.ChannelItems = append(
+					c.ChannelItems, ChannelItem{
+						ID:             channel.ID,
+						ListIndex:      listIndex,
+						Name:           groupMember,
+						DisplayName:    displayName,
+						Topic:          channel.Topic,
+						Type:           channel.Type,
+						UserID:         "",
+						IsGroupPrimary: memberIdx == 0,
+						StylePrefix:    channel.StylePrefix,
+						StyleIcon:      channel.StyleIcon,
+						StyleText:      channel.StyleText,
+						LastReadTime:   time.Now().UTC(),
+					},
+				)
+			}
+		} else {
+			c.ChannelItems = append(c.ChannelItems, channel)
+		}
+	}
+
 }
 
 func (c *Channels) MarkAsRead(channelID int) {
@@ -298,6 +350,20 @@ func (c *Channels) ScrollDown() {
 	}
 }
 
+func (c *Channels) GetChannelIndex(name string) int {
+	// because the item buffers can be endless in termui, we have to len it rather than range
+	// otherwise, infiniloops
+	l := len(c.List.Items)
+	formattedName := fmt.Sprintf("[%s]", name)
+	for index := 0; index < l; index++ {
+		channelName := c.List.Items[index]
+		if strings.Contains(channelName, formattedName) {
+			return index
+		}
+	}
+	return -1
+}
+
 // Search will search through the channels to find a channel,
 // when a match has been found the selected channel will then
 // be the channel that has been found
@@ -321,17 +387,20 @@ func (c *Channels) Search(term string) {
 	}
 
 	if len(c.SearchMatches) > 0 {
-		c.GotoPosition(0)
+		c.GotoPosition(0, false)
 		c.SearchPosition = 0
 	}
 }
 
 // GotoPosition is used by the search functionality to automatically
 // scroll to a specific location in the channels component
-func (c *Channels) GotoPosition(position int) {
+func (c *Channels) GotoPosition(position int, absolute bool) {
 
 	// The new position
-	newPos := c.SearchMatches[position]
+	newPos := position
+	if !absolute {
+		newPos = c.SearchMatches[position]
+	}
 
 	// Is the new position in range of the current view?
 	minRange := c.Offset
@@ -362,7 +431,7 @@ func (c *Channels) GotoPosition(position int) {
 func (c *Channels) SearchNext() {
 	newPosition := c.SearchPosition + 1
 	if newPosition <= len(c.SearchMatches)-1 {
-		c.GotoPosition(newPosition)
+		c.GotoPosition(newPosition, false)
 		c.SearchPosition = newPosition
 	}
 }
@@ -371,7 +440,7 @@ func (c *Channels) SearchNext() {
 func (c *Channels) SearchPrev() {
 	newPosition := c.SearchPosition - 1
 	if newPosition >= 0 {
-		c.GotoPosition(newPosition)
+		c.GotoPosition(newPosition, false)
 		c.SearchPosition = newPosition
 	}
 }

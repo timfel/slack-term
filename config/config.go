@@ -79,6 +79,7 @@ func getDefaultConfig() Config {
 				"j":          "channel-down",
 				"g":          "channel-top",
 				"G":          "channel-bottom",
+				"'":          "channel-unread",
 				"<previous>": "chat-up",
 				"C-b":        "chat-up",
 				"C-u":        "chat-up",
