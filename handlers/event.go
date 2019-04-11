@@ -474,14 +474,11 @@ func actionHelp(ctx *context.AppContext) {
 }
 
 func actionGoToUnread(ctx *context.AppContext) {
-    for _, channel := range ctx.Service.Channels {
+    for index, channel := range ctx.View.Channels.ChannelItems {
         if channel.Notification {
-            index := ctx.View.Channels.GetChannelIndex(channel.Name)
-            if index >= 0 {
-                ctx.View.Channels.GotoPosition(index, true)
-                actionChangeChannel(ctx)
-                break
-            }
+            ctx.View.Channels.GotoPosition(index, true)
+            actionChangeChannel(ctx)
+            break
         }
     }
 }
