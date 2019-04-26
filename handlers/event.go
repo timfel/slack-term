@@ -440,9 +440,6 @@ func actionNewMessage(ctx *context.AppContext, ev *slack.MessageEvent) {
 	ctx.View.Channels.MarkAsUnread(ev.Channel)
 	termui.Render(ctx.View.Channels)
 
-	// Terminal bell
-	fmt.Print("\a")
-
 	// Desktop notification
 	if ctx.Config.Notify == config.NotifyMention {
 		if isMention(ctx, ev) {
@@ -565,7 +562,7 @@ func isHighlight(ctx *context.AppContext, ev *slack.MessageEvent) bool {
 			if isMention(ctx, ev) {
 				return true
 			}
-		} else if strings.ContainsAny(ev.Text, substr) {
+		} else if strings.Contains(ev.Text, substr) {
 			return true
 		}
 	}
@@ -574,6 +571,11 @@ func isHighlight(ctx *context.AppContext, ev *slack.MessageEvent) bool {
 }
 
 func createNotifyMessage(ctx *context.AppContext, ev *slack.MessageEvent) {
+	// Terminal bell
+	fmt.Print("\a")
+	// Mark as mentioned
+	ctx.View.Channels.MarkAsMention(ev.Channel)
+	// Desktop notification
 	go func() {
 		if notifyTimer != nil {
 			notifyTimer.Stop()

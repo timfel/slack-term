@@ -18,6 +18,7 @@ const (
 	IconIM           = "●"
 	IconMpIM         = "☰"
 	IconNotification = "*"
+        IconImportant    = "!"
 
 	PresenceAway   = "away"
 	PresenceActive = "active"
@@ -38,6 +39,7 @@ type ChannelItem struct {
 	UserID       string
 	Presence     string
 	Notification bool
+	Mention      bool
 	LastReadTime time.Time
 
 	StylePrefix string
@@ -52,7 +54,11 @@ type ChannelItem struct {
 func (c ChannelItem) ToString() string {
 	var prefix string
 	if c.Notification {
-		prefix = IconNotification
+		if c.Mention {
+			prefix = IconImportant
+		} else {
+			prefix = IconNotification
+		}
 	} else {
 		prefix = " "
 	}
@@ -260,11 +266,17 @@ func (c *Channels) SetChannels(channels []ChannelItem) {
 
 func (c *Channels) MarkAsRead(channelID int) {
 	c.ChannelItems[channelID].Notification = false
+	c.ChannelItems[channelID].Mention = false
 }
 
 func (c *Channels) MarkAsUnread(channelID string) {
 	index := c.FindChannel(channelID)
 	c.ChannelItems[index].Notification = true
+}
+
+func (c *Channels) MarkAsMention(channelID string) {
+	index := c.FindChannel(channelID)
+	c.ChannelItems[index].Mention = true
 }
 
 func (c *Channels) SetPresence(channelID string, presence string) {
